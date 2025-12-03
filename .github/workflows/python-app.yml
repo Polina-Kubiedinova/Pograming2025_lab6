@@ -118,6 +118,8 @@ jobs:
           
           pkill -f "laba6_web.py" || true
           
-          nohup ./venv/bin/python3 laba6_web.py > log.txt 2>&1 &
+          nohup ./venv/bin/python3 laba6_web.py > log.txt 2>&1 < /dev/null &
           
           sleep 5
+          
+          exit 0
