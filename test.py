@@ -71,5 +71,5 @@ class FlaskAppTests(unittest.TestCase):
       html = response.data.decode("utf-8")
       self.assertIn("не знайдена", html)
 
-if name == "main":
+if __name__ == "main":
    unittest.main()
