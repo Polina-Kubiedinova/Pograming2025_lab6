@@ -80,27 +80,37 @@ jobs:
       run: terraform apply -input=false -auto-approve
       working-directory: terraform
 
+    - name: Get EC2 IP
+      id: get_ip
+      working-directory: terraform
+      run: |
+        echo "NEW_EC2_HOST=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
+        
     - name: Copy app files to EC2
       uses: appleboy/scp-action@v0.1.4
       with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
+        host: ${{ env.NEW_EC2_HOST }}  # Беремо динамічний IP
+        username: "ubuntu"             # Для AWS EC2 (ami ubuntu) юзер зазвичай 'ubuntu', а не user
         key: ${{ secrets.EC2_SSH_KEY }}
         source: "."
-        target: "/home/${{ secrets.EC2_USER }}/app"
-        
+        target: "/home/ubuntu/app"
+
     - name: Install dependencies and restart Flask on EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
+        host: ${{ env.NEW_EC2_HOST }}  # Беремо динамічний IP
+        username: "ubuntu"
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          cd /home/${{ secrets.EC2_USER }}/app
+          sudo apt-get update
+          sudo apt-get install -y python3-venv
+          
+          cd /home/ubuntu/app
           python3 -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
-          # Якщо хочеш запускати у фоні без systemd:
+          
+          # Вбиваємо старий процес та запускаємо новий
           pkill -f "laba6_web.py" || true
-          nohup python3 laba6_web.py &
+          nohup python3 laba6_web.py > log.txt 2>&1 &
