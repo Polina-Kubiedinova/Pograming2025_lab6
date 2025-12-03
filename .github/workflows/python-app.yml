@@ -90,22 +90,22 @@ jobs:
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ env.NEW_EC2_HOST }}  # Беремо динамічний IP
-        username: "ubuntu"             # Для AWS EC2 (ami ubuntu) юзер зазвичай 'ubuntu', а не user
+        username: "ec2-user"             # Для AWS EC2 (ami ubuntu) юзер зазвичай 'ubuntu', а не user
         key: ${{ secrets.EC2_SSH_KEY }}
         source: "."
-        target: "/home/ubuntu/app"
+        target: "/home/ec2-user/app"
 
     - name: Install dependencies and restart Flask on EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ env.NEW_EC2_HOST }}  # Беремо динамічний IP
-        username: "ubuntu"
+        username: "ec2-user"
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           sudo apt-get update
           sudo apt-get install -y python3-venv
           
-          cd /home/ubuntu/app
+          cd /home/ec2-user/app
           python3 -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
