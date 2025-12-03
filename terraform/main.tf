@@ -50,7 +50,7 @@ resource "aws_security_group" "web_app" {
 
 resource "aws_key_pair" "deploy_key" {
   key_name   = "deploy_key"
-  public_key = file("./ec2_deploy_key.pub") # Публічний ключ, який ти створила
+  public_key = file(""${path.module}/../ec2_deploy_key.pub") # Публічний ключ, який ти створила
 }
 
 resource "aws_instance" "webapp_instance" {
