@@ -114,21 +114,26 @@ jobs:
           
           python3 -m venv venv
           source venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements.txt
           
+          # 1. Вбиваємо старий процес
           pkill -f "laba6_web.py" || true
           
-          nohup ./venv/bin/python3 laba6_web.py > /dev/null 2>&1 &
-          sleep 5
+          # 2. Видаляємо старий лог, якщо він був
+          rm -f log.txt
+          
+          # 3. Запускаємо з записом у файл log.txt
+          # -u змушує python писати у файл миттєво
+          nohup ./venv/bin/python3 -u laba6_web.py > log.txt 2>&1 &
+          
+          # 4. Чекаємо 10 секунд (щоб помилка встигла статися, якщо вона є)
+          sleep 10
+          
+          # 5. ДИВИМОСЯ ЛОГ
+          echo "==== ВМІСТ ЛОГУ (log.txt) ===="
+          cat log.txt
+          echo "=============================="
+          
+          # 6. Виходимо (exit 0, щоб GitHub не лаявся, навіть якщо процес впав)
           exit 0
-    - name: Show Log on Error
-      if: always()
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ env.NEW_EC2_HOST }}
-        username: "ec2-user"
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          echo "==== ЛОГ ПОМИЛКИ ===="
-          cat /home/ec2-user/app/log.txt || echo "Лог файл не знайдено"
-          echo "====================="
