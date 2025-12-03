@@ -1,7 +1,7 @@
 terraform {
   required_version = ">= 0.13.0"
   backend "s3" {
-    bucket = "terraform-state-pawnshop-shcherban"
+    bucket = "laba6-bucket-polin"
     key    = "prod/terraform.tfstate"
     region = "eu-central-1"
   }
