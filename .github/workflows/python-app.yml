@@ -98,7 +98,7 @@ jobs:
         source: "."
         target: "/home/ec2-user/app"
 
-    - name: Install dependencies and restart Flask on EC2
+    - name: Install dependencies and restart Flask (Fixed Nohup)
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ env.NEW_EC2_HOST }}
@@ -114,26 +114,31 @@ jobs:
           
           python3 -m venv venv
           source venv/bin/activate
-          pip install --upgrade pip
           pip install -r requirements.txt
           
           # 1. Вбиваємо старий процес
           pkill -f "laba6_web.py" || true
           
-          # 2. Видаляємо старий лог, якщо він був
+          # 2. Видаляємо старий лог
           rm -f log.txt
           
-          # 3. Запускаємо з записом у файл log.txt
-          # -u змушує python писати у файл миттєво
-          nohup ./venv/bin/python3 -u laba6_web.py > log.txt 2>&1 &
+          # 3. ЗАПУСК (Виправлено)
+          # Додано < /dev/null, щоб відв'язати ввід, і disown, щоб захистити від закриття
+          nohup ./venv/bin/python3 -u laba6_web.py > log.txt 2>&1 < /dev/null &
+          PID=$!
+          disown $PID
           
-          # 4. Чекаємо 10 секунд (щоб помилка встигла статися, якщо вона є)
-          sleep 10
+          # 4. Чекаємо трохи довше (t3.micro повільний)
+          echo "Чекаємо запуску..."
+          sleep 15
           
-          # 5. ДИВИМОСЯ ЛОГ
+          # 5. ПЕРЕВІРКА: Чи працює процес?
+          echo "==== ЧИ Є ПРОЦЕС У СПИСКУ? ===="
+          ps aux | grep laba6_web.py | grep -v grep || echo "ПРОЦЕСУ НЕМАЄ (Він впав)"
+          
+          # 6. ДИВИМОСЯ ЛОГ
           echo "==== ВМІСТ ЛОГУ (log.txt) ===="
           cat log.txt
           echo "=============================="
           
-          # 6. Виходимо (exit 0, щоб GitHub не лаявся, навіть якщо процес впав)
           exit 0
