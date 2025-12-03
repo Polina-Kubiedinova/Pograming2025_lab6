@@ -121,3 +121,14 @@ jobs:
           nohup ./venv/bin/python3 laba6_web.py > /dev/null 2>&1 &
           sleep 5
           exit 0
+    - name: Show Log on Error
+      if: always()
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ env.NEW_EC2_HOST }}
+        username: "ec2-user"
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          echo "==== ЛОГ ПОМИЛКИ ===="
+          cat /home/ec2-user/app/log.txt || echo "Лог файл не знайдено"
+          echo "====================="
