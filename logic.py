@@ -44,7 +44,7 @@ def search_item(keyword):
       html += "</ul>"
    else:
       html = f"<p> Річ з ключовим словом '{keyword}' не знайдена.</p>"
-   html += "<p><a href='/'>⬅ Повернутись</a></p>"
+   html += "<p><a href='/'> Повернутись</a></p>"
    return html
 
 

@@ -1,75 +1,55 @@
 import unittest
 from laba6_web import app
-from logic import items, add_item, next_id
+import logic
 
-class FlaskAppTests(unittest.TestCase):
+
+class TestLogic(unittest.TestCase):
 
    def setUp(self):
-      # Тестовий клієнт Flask
-      self.client = app.test_client()
+      """Очищуємо items перед кожним тестом"""
+      logic.items.clear()
+      logic.next_id = 1
 
-      # Очистка даних перед кожним тестом
-      items.clear()
-      global next_id
-      next_id = 1
+   def test_add_item(self):
+      result = logic.add_item("Телефон", "Іван", 5000)
+      self.assertEqual(len(logic.items), 1)
+      self.assertEqual(logic.items[0]["name"], "Телефон")
+      self.assertIn("Додано", result)
 
-      # Початкові тестові дані
-      add_item("Телефон", "Іван", 5000)
-      add_item("Ноутбук", "Оксана", 12000)
+   def test_add_duplicate_item(self):
+      logic.add_item("Телефон", "Іван", 5000)
+      result = logic.add_item("Телефон", "Іван", 5000)
+      self.assertEqual(result.strip(), "Така річ вже існує")
+      self.assertEqual(len(logic.items), 1)
 
-   # ---------- Домашня сторінка ----------
-   def test_home_page(self):
-      response = self.client.get("/")
-      self.assertEqual(response.status_code, 200)
-      html = response.data.decode("utf-8")  # декодуємо bytes -> str
-      self.assertIn("Моя колекція речей", html)
+   def test_remove_item_by_id(self):
+      logic.add_item("Телефон", "Іван", 5000)
+      result = logic.remove_item_by_id(1)
+      self.assertEqual(len(logic.items), 0)
+      self.assertIn("Видалено", result)
+
+   def test_remove_item_not_found(self):
+      result = logic.remove_item_by_id(123)
+      self.assertIn("не знайдена", result)
+
+   def test_total_value(self):
+      logic.add_item("Телефон", "Іван", 5000)
+      logic.add_item("Ноутбук", "Оксана", 10000)
+      result = logic.total_value()
+      self.assertIn("15000 грн", result)
+
+   def test_search_item_by_name(self):
+      logic.add_item("Телефон", "Іван", 5000)
+      html = logic.search_item("тел")
       self.assertIn("Телефон", html)
+      self.assertIn("5000", html)
 
-   # ---------- Додавання ----------
-   def test_add_item_route(self):
-      response = self.client.post("/add", data={
-         "name": "Книга",
-         "owner": "Андрій",
-         "value": "300"
-      }, follow_redirects=True)
-      self.assertEqual(response.status_code, 200)
-      html = response.data.decode("utf-8")
-      self.assertIn("Книга", html)
-      self.assertEqual(len(items), 3)
-
-   # ---------- Видалення ----------
-   def test_delete_item(self):
-      response = self.client.get("/delete/1", follow_redirects=True)
-      self.assertEqual(response.status_code, 200)
-      html = response.data.decode("utf-8")
-      self.assertNotIn("Телефон", html)
-      self.assertEqual(len(items), 1)
-
-   def test_delete_not_found(self):
-      response = self.client.get("/delete/999", follow_redirects=True)
-      self.assertEqual(response.status_code, 200)
-      html = response.data.decode("utf-8")
-      self.assertIn("Моя колекція речей", html)
-
-   # ---------- Пошук ----------
-   def test_search_found(self):
-      response = self.client.get("/search?keyword=Тел")
-      self.assertEqual(response.status_code, 200)
-      html = response.data.decode("utf-8")
-      self.assertIn("Телефон", html)
-      self.assertIn("Результати пошуку", html)
-
-   def test_search_by_id(self):
-      response = self.client.get("/search?keyword=2")
-      self.assertEqual(response.status_code, 200)
-      html = response.data.decode("utf-8")
+   def test_search_item_by_id(self):
+      logic.add_item("Ноутбук", "Оксана", 12000)
+      html = logic.search_item("1")
       self.assertIn("Ноутбук", html)
+      self.assertIn("12000", html)
 
-   def test_search_not_found(self):
-      response = self.client.get("/search?keyword=qqq")
-      self.assertEqual(response.status_code, 200)
-      html = response.data.decode("utf-8")
-      self.assertIn("не знайдена", html)
 
-if __name__ == "main":
+if __name__ == "__main__":
    unittest.main()
