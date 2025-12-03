@@ -101,21 +101,23 @@ jobs:
     - name: Install dependencies and restart Flask on EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ env.NEW_EC2_HOST }}  # Беремо динамічний IP
+        host: ${{ env.NEW_EC2_HOST }}
         username: "ec2-user"
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           sudo dnf update -y
           sudo dnf install -y python3 python3-pip
-          cd /home/ec2-user/app
-          python3 -m venv venv
           
+          mkdir -p /home/ec2-user/app
           cd /home/ec2-user/app
+          
           python3 -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
           
-          # Вбиваємо старий процес та запускаємо новий
           pkill -f "laba6_web.py" || true
-          nohup python3 laba6_web.py > log.txt 2>&1 &
+          
+          nohup ./venv/bin/python3 laba6_web.py > log.txt 2>&1 &
+          
+          sleep 5
