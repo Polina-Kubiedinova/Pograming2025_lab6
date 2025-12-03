@@ -2,7 +2,6 @@ import unittest
 from laba6_web import app
 from logic import items, add_item, next_id
 import unittest
-from laba6.Pograming2025_lab6.laba6_web import app, items, add_item, next_id
 
 class FlaskAppTests(unittest.TestCase):
 
