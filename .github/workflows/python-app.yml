@@ -13,13 +13,9 @@ permissions:
   contents: read
 
 jobs:
-  main_job:
+  test:
 
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
-
     steps:
     - uses: actions/checkout@v4
       with: 
@@ -31,7 +27,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        pip install flake8 flask pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
       run: |
@@ -39,106 +35,139 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        
     - name: Run tests
       run: |
         python3 -m unittest discover -s . -p "test.py" -v
       env: 
         CI: true 
-
-    - name: Setup Terraform
-      env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
+        
+  terraform:
+    name: Teraform
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Setup Terraform      
       uses: hashicorp/setup-terraform@v2
       with:
-           terraform_version: 1.0.1
-           terraform_wrapper: false 
+           terraform_version: 1.6.0
       
     - name: Terraform Format
       id: fmt
       run: terraform fmt -check
-      working-directory: terraform
+      working-directory: ./terraform
       continue-on-error: true 
 
     - name: Terraform Init
-      env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
       id: init
       run: terraform init
-      working-directory: terraform
-
-    - name: Terraform Plan
+      working-directory: ./terraform
       env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
+          AWS_REGION: "eu-central-1"
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+      working-directory: ./terraform
+
+    - name: Debug Public Key
+      run: |
+        echo "Public key length: ${#SSH_KEY}"
+      env:
+        SSH_KEY: ${{ secrets.EС2_SSH_PUBLIC_KEY }}
+        
+    - name: Terraform Plan
       id: plan
-      run: terraform plan -no-color -input=false -refresh=true
-      working-directory: terraform
+      run: terraform plan -no-color -input=false 
+      working-directory: ./terraform
+      continue-on-error: true
+      env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
+          TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
+          
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' 
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Terraform Init
+      run: terraform init
+      working-directory: ./terraform
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
+        AWS_REGION: "eu-central-1"
 
     - name: Terraform Apply
+      run: terraform apply -auto-approve -no-color
+      working-directory: ./terraform
       env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
-      run: terraform apply -input=false -auto-approve
-      working-directory: terraform
+          TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
 
     - name: Get EC2 IP
       id: get_ip
-      working-directory: terraform
       run: |
-        echo "NEW_EC2_HOST=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
-        
-    - name: Copy app files to EC2
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ env.NEW_EC2_HOST }}  # Беремо динамічний IP
-        username: "ec2-user"             # Для AWS EC2 (ami ubuntu) юзер зазвичай 'ubuntu', а не user
-        key: ${{ secrets.EC2_SSH_KEY }}
-        source: "."
-        target: "/home/ec2-user/app"
+        INSTANCE_IP=$(terraform output -raw instance_public_ip)
+        echo "instance_ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
+      working-directory: ./terraform
+      env:
+         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID }}
 
-    - name: Install dependencies and restart Flask (Fixed Nohup)
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ env.NEW_EC2_HOST }}
-        username: "ec2-user"
-        key: ${{ secrets.EC2_SSH_KEY }}
-        command_timeout: 30m
-        script: |
-          sudo dnf update -y
-          sudo dnf install -y python3 python3-pip
-          
-          mkdir -p /home/ec2-user/app
-          cd /home/ec2-user/app
-          
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
-          
-          # 1. Вбиваємо старий процес
-          pkill -f "laba6_web.py" || true
-          
-          # 2. Видаляємо старий лог
-          rm -f log.txt
-          
-          # 3. ЗАПУСК (Виправлено)
-          # Додано < /dev/null, щоб відв'язати ввід, і disown, щоб захистити від закриття
-          nohup ./venv/bin/python3 -u laba6_web.py > log.txt 2>&1 < /dev/null &
-          PID=$!
-          disown $PID
-          
-          # 4. Чекаємо трохи довше (t3.micro повільний)
-          echo "Чекаємо запуску..."
-          sleep 15
-          
-          # 5. ПЕРЕВІРКА: Чи працює процес?
-          echo "==== ЧИ Є ПРОЦЕС У СПИСКУ? ===="
-          ps aux | grep laba6_web.py | grep -v grep || echo "ПРОЦЕСУ НЕМАЄ (Він впав)"
-          
-          # 6. ДИВИМОСЯ ЛОГ
-          echo "==== ВМІСТ ЛОГУ (log.txt) ===="
-          cat log.txt
-          echo "=============================="
-          
-          exit 0
+    - name: Wait for EC2 to be ready
+      run: |
+        echo "Waiting for EC2 instance to be ready..."
+        sleep 60
+
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H ${{ steps.get-ip.outputs.instance_ip }} >> ~/.ssh/known_hosts
+
+    - name: Deploy Application Code
+      run: |
+        # Create deployment package
+        tar -czf app.tar.gz app.py templates/
+
+        # Copy to server
+        scp -i ~/.ssh/deploy_key app.tar.gz ec2-user@${{ steps.get-ip.outputs.instance_ip }}:/tmp/
+
+        # Extract and restart service
+        ssh -i ~/.ssh/deploy_key ec2-user@${{ steps.get-ip.outputs.instance_ip }} << 'ENDSSH'
+          cd /opt/webapp
+          tar -xzf /tmp/app.tar.gz
+          sudo systemctl daemon-reload
+          sudo systemctl enable webapp.service
+          sudo systemctl restart webapp.service
+          sudo systemctl status webapp.service
+        ENDSSH
+        
+    - name: Display Deployment Info
+      run: |
+        echo "### Deployment Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**EC2 Instance IP:** ${{ steps.get-ip.outputs.instance_ip }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Application URL:** http://${{ steps.get-ip.outputs.instance_ip }}:5000" >> $GITHUB_STEP_SUMMARY
+        echo "**Region:** eu-central-1" >> $GITHUB_STEP_SUMMARY
+        echo "**Instance Type:** t3.micro" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Your Flask Pawnshop application is now running!" >> $GITHUB_STEP_SUMMARY   
+   
