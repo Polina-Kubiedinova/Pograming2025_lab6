@@ -124,7 +124,7 @@ jobs:
           TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
 
     - name: Get EC2 IP
-      id: get_ip
+      id: get-ip
       run: |
         INSTANCE_IP=$(terraform output -raw instance_public_ip)
         echo "instance_ip=$INSTANCE_IP" >> $GITHUB_OUTPUT
