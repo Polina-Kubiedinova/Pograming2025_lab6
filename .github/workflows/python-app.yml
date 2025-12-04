@@ -77,7 +77,7 @@ jobs:
       run: |
         echo "Public key length: ${#SSH_KEY}"
       env:
-        SSH_KEY: ${{ secrets.EС2_SSH_PUBLIC_KEY }}
+        SSH_KEY: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
         
     - name: Terraform Plan
       id: plan
