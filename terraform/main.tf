@@ -97,7 +97,7 @@ resource "aws_instance" "webapp_instance" {
               Type=simple
               User=ec2-user
               WorkingDirectory=/opt/webapp
-              ExecStart=/usr/bin/python3 /opt/webapp/app.py
+              ExecStart=/usr/bin/python3 /opt/webapp/laba6_web.py
               Restart=always
               RestartSec=10
 
