@@ -148,8 +148,8 @@ jobs:
     - name: Deploy Application Code
       run: |
         # Create deployment package
-        tar -czf app.tar.gz app.py templates/
-
+        tar -czf app.tar.gz laba6_web.py logic.py
+        
         # Copy to server
         scp -i ~/.ssh/deploy_key app.tar.gz ec2-user@${{ steps.get-ip.outputs.instance_ip }}:/tmp/
 
